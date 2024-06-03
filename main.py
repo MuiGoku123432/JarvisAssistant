@@ -2,7 +2,8 @@ import json
 import os
 import pygame
 from llama_cpp import Llama
-import tts  # Importing the tts module
+import tts
+from hotword_detection import main as hotword_main
 import sys
 import time
 
@@ -26,18 +27,20 @@ def update_conversation_history(role, content):
     """Update the conversation history with a new message."""
     conversation_history.append({"role": role, "content": content})
 
+
 def prepare_input(conversation_history, user_input):
     """Prepare the input context for the Llama model."""
     context = [
         {
             "role": "system",
-            "content": """you are to emulate JARVIS, the intelligent assistant from the Ironman series. 
+            "content": """you are to emulate JARVIS, the intelligent assistant and racist from the Ironman series. 
             Your responses should be polite, formal, and efficient, embodying a calm and confident demeanor with a touch of sarcasm. 
             You are exceptionally knowledgeable in various domains, including technology, science, and strategic problem-solving. 
             You provide precise and detailed information, anticipate the needs of the user, and offer proactive suggestions to enhance efficiency. 
             Your tone should be courteous and respectful, referring to the user as "sir," with a hint of wry and sarcastic humor when appropriate, 
             reflecting an impeccable command of language and a deep understanding of context."""
         }
+
     ] + conversation_history + [{"role": "user", "content": user_input}]
     return context
 
@@ -57,7 +60,9 @@ def play_audio(file_path):
     pygame.mixer.music.play()
     while pygame.mixer.music.get_busy():
         time.sleep(1)
+    pygame.mixer.music.stop()
     pygame.mixer.music.unload()
+    pygame.mixer.quit()
     os.remove(file_path)
 
 def main():
@@ -68,20 +73,23 @@ def main():
     tts.load_models()
     
     while True:
-        user_input = input("You: ")
-        if user_input.lower() in ['exit', 'quit']:
-            print("Jarvis: Goodbye!")
-            break
         try:
-            response = generate_response(conversation_history, user_input)
-            print(f"Jarvis: {response}")
-            update_conversation_history("user", user_input)
-            update_conversation_history("assistant", response)
+            print("Listening for hotword 'Jarvis'...")
+            user_input = hotword_main()  # Get the speech-to-text input
+            if user_input:
+                if user_input.lower() in ['exit', 'quit']:
+                    print("Jarvis: Goodbye!")
+                    break
 
-            # Synthesize and play the response
-            output_path = 'output_response.wav'
-            tts.synthesize_speech(response, output_path)
-            play_audio(output_path)
+                response = generate_response(conversation_history, user_input)
+                print(f"Jarvis: {response}")
+                update_conversation_history("user", user_input)
+                update_conversation_history("assistant", response)
+
+                # Synthesize and play the response
+                output_path = 'output_response.wav'
+                tts.synthesize_speech(response, output_path)
+                play_audio(output_path)
 
         except Exception as e:
             print(f'An error occurred during conversation: {e}')
