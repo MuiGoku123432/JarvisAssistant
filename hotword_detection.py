@@ -9,6 +9,9 @@ import multiprocessing as mp
 import ctypes
 import time
 
+audio_model = whisper.load_model("base.en")
+print("Model loaded.\n")
+
 HOTWORD = "jarvis"
 AUDIO_FILE = "hotword_audio.wav"
 RECORD_TIMEOUT = 2
@@ -72,12 +75,10 @@ def listen_for_hotword(data_queue, hotword_detected, hotword_text):
     recognizer = sr.Recognizer()
     microphone = sr.Microphone(sample_rate=16000, device_index=0)
 
-    audio_model = whisper.load_model("base.en")
-    print("Model loaded.\n")
 
     with microphone as source:
         # Adjust for ambient noise
-        recognizer.adjust_for_ambient_noise(source)
+        #recognizer.adjust_for_ambient_noise(source)
         # Set energy threshold to increase sensitivity
         recognizer.energy_threshold = 300  # You can lower this value to increase sensitivity
         recognizer.dynamic_energy_threshold = True  # Enable dynamic adjustment
