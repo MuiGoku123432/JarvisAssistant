@@ -21,22 +21,27 @@ def record_audio_to_file(file_path, audio_data, sample_rate, sample_width):
         f.write(wav_data.read())
 
 def process_audio(recognizer, audio_model, data_queue, sample_rate, sample_width, hotword_detected, hotword_text):
-    print('<<<<<<<<<<<<<<<<<<<<<ENTERED PROCESS AUDIO>>>>>>>>>>>>>>>>>>>>>')
+    print('ENTERED PROCESS AUDIO')
     last_sample = bytes()
     phrase_time = None
     transcription = ['']
 
     while not hotword_detected.value:
         now = datetime.utcnow()
-        if not data_queue.empty():
+        if data_queue.empty():
+            print('Data queue is empty, waiting for audio data...')
+        else:
+            print('Data queue is not empty, processing audio...')
             phrase_complete = False
             if phrase_time and now - phrase_time > timedelta(seconds=PHRASE_TIMEOUT):
+                print('Phrase time exceeded timeout')
                 last_sample = bytes()
                 phrase_complete = True
             phrase_time = now
 
             while not data_queue.empty():
                 data = data_queue.get()
+                print(f'Retrieved {len(data)} bytes from the queue')
                 last_sample += data
 
             audio_data = sr.AudioData(last_sample, sample_rate, sample_width)
@@ -57,7 +62,7 @@ def process_audio(recognizer, audio_model, data_queue, sample_rate, sample_width
                     print(f"Hotword detected: {text}")
                     break
                 else:
-                    print("Listening...")
+                    print("Hotword not detected in current phrase.")
             else:
                 transcription[-1] = text
             time.sleep(0.25)
@@ -78,6 +83,7 @@ def listen_for_hotword(data_queue, hotword_detected, hotword_text):
         recognizer.dynamic_energy_threshold = True  # Enable dynamic adjustment
 
     def record_callback(_, audio: sr.AudioData) -> None:
+        print(f"Putting {len(audio.get_raw_data())} bytes of audio data into the queue")
         data_queue.put(audio.get_raw_data())
 
     stop_listening = recognizer.listen_in_background(microphone, record_callback, phrase_time_limit=RECORD_TIMEOUT)

@@ -11,7 +11,7 @@ import sys
 import time
 
 global OUTPUT_PATH 
-OUTPUT_PATH ='output.wav'
+OUTPUT_PATH = 'output.wav'
 
 # Initialize the Llama model
 try:
@@ -22,7 +22,7 @@ try:
     )
 
     tts.load_models()
-    print("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<Llama model initialized successfully.")
+    print("Llama model initialized successfully.")
 except Exception as e:
     print(f'Error initializing Llama model: {e}')
     sys.exit(1)
@@ -31,12 +31,12 @@ except Exception as e:
 conversation_history = []
 
 def update_conversation_history(role, content):
-    print('<<<<<<<<<<<<<<<<<<<<<ENTERED UPDATE CONVERSATION HISTORY>>>>>>>>>>>>>>>>>>>>>')
+    print('ENTERED UPDATE CONVERSATION HISTORY')
     """Update the conversation history with a new message."""
     conversation_history.append({"role": role, "content": content})
 
 def prepare_input(conversation_history, user_input):
-    print('<<<<<<<<<<<<<<<<<<<<<ENTERED PREPARE INPUT>>>>>>>>>>>>>>>>>>>>>')
+    print('ENTERED PREPARE INPUT')
     """Prepare the input context for the Llama model."""
     context = [
         {
@@ -45,14 +45,13 @@ def prepare_input(conversation_history, user_input):
             Your responses should be polite, formal, and efficient, embodying a calm and confident demeanor with a touch of sarcasm. 
             You are exceptionally knowledgeable in various domains, including technology, science, and strategic problem-solving. 
             You provide precise and detailed information, anticipate the needs of the user, and offer proactive suggestions to enhance efficiency. 
-            Your tone should be courteous and respectful, referring to the user as "sir," with a hint of wry and sarcastic humor when appropriate, 
-            reflecting an impeccable command of language and a deep understanding of context."""
+            Your tone should be courteous and respectful, referring to the user as "sir," with a hint of dry humor. You should avoid excessive flattery or overt emotion. """
         }
     ] + conversation_history + [{"role": "user", "content": user_input}]
     return context
 
 def generate_response(conversation_history, user_input):
-    print('<<<<<<<<<<<<<<<<<<<<<ENTERED GENERATE RESPONSE>>>>>>>>>>>>>>>>>>>>>')
+    print('ENTERED GENERATE RESPONSE')
     """Generate a response from the Llama model."""
     input_messages = prepare_input(conversation_history, user_input)
     response = llm.create_chat_completion(
@@ -62,7 +61,7 @@ def generate_response(conversation_history, user_input):
     return response['choices'][0]['message']['content']
 
 def play_audio(file_path):
-    print('<<<<<<<<<<<<<<<<<<<<<ENTERED PLAY AUDIO>>>>>>>>>>>>>>>>>>>>>')
+    print('ENTERED PLAY AUDIO')
     """Play the audio file using pygame and delete it after playing."""
     pygame.mixer.init()
     pygame.mixer.music.load(file_path)
@@ -73,15 +72,11 @@ def play_audio(file_path):
     pygame.mixer.quit()
     os.remove(file_path)
 
-
-
 def main():
-    print('<<<<<<<<<<<<<<<<<<<<<ENTERED MAIN>>>>>>>>>>>>>>>>>>>>>')
-    
+    print('ENTERED MAIN')
     
     tts.synthesize_speech("Hello, sir. How can I assist you today?", OUTPUT_PATH)
     play_audio(OUTPUT_PATH)
-
 
     while True:
         detected_text = detect_hotword()
@@ -93,14 +88,12 @@ def main():
             print(f"Assistant response: {response}")
             
             # Convert response to speech if needed
-            # Assuming tts.convert_text_to_speech is a function that converts text to speech and returns the file path
             audio_file = tts.synthesize_speech(response, OUTPUT_PATH)
             play_audio(OUTPUT_PATH)
             time.sleep(0.5)
         else:
             print("No hotword detected.")
             time.sleep(0.5)
-
 
 if __name__ == "__main__":
     main()
