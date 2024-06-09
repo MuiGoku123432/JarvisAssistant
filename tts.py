@@ -4,6 +4,8 @@ import torch
 from OpenVoice.openvoice.api import ToneColorConverter
 from OpenVoice.MeloTTS.melo.api import TTS
 
+#/* cSpell:disable */
+
 sys.stdout.reconfigure(encoding='utf-8')
 
 # Setup paths and device

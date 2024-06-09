@@ -2,19 +2,27 @@ import json
 import os
 import pygame
 from llama_cpp import Llama
-import tts  # Importing the tts module
+import tts
+from hotword_detection import main as detect_hotword
+from shared import HOTWORD_DETECTED
+from multiprocessing import Process, Value
+import ctypes
 import sys
 import time
+
+global OUTPUT_PATH 
+OUTPUT_PATH ='output.wav'
 
 # Initialize the Llama model
 try:
     llm = Llama(
         model_path="D:\\repos\\mine\\JarvisAssist\\ollama\\llm\\llama.cpp\\models\\dolphin-2.9-llama3-8b.Q8_0.gguf",
         chat_format="chatml",
-        n_gpu_layers=-1  # Uncomment to use GPU acceleration
-        # seed=1337,        # Uncomment to set a specific seed
-        # n_ctx=2048,       # Uncomment to increase the context window
+        n_gpu_layers=32  # Use maximum GPU layers for optimal performance
     )
+
+    tts.load_models()
+    print("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<Llama model initialized successfully.")
 except Exception as e:
     print(f'Error initializing Llama model: {e}')
     sys.exit(1)
@@ -23,10 +31,12 @@ except Exception as e:
 conversation_history = []
 
 def update_conversation_history(role, content):
+    print('<<<<<<<<<<<<<<<<<<<<<ENTERED UPDATE CONVERSATION HISTORY>>>>>>>>>>>>>>>>>>>>>')
     """Update the conversation history with a new message."""
     conversation_history.append({"role": role, "content": content})
 
 def prepare_input(conversation_history, user_input):
+    print('<<<<<<<<<<<<<<<<<<<<<ENTERED PREPARE INPUT>>>>>>>>>>>>>>>>>>>>>')
     """Prepare the input context for the Llama model."""
     context = [
         {
@@ -42,6 +52,7 @@ def prepare_input(conversation_history, user_input):
     return context
 
 def generate_response(conversation_history, user_input):
+    print('<<<<<<<<<<<<<<<<<<<<<ENTERED GENERATE RESPONSE>>>>>>>>>>>>>>>>>>>>>')
     """Generate a response from the Llama model."""
     input_messages = prepare_input(conversation_history, user_input)
     response = llm.create_chat_completion(
@@ -51,40 +62,45 @@ def generate_response(conversation_history, user_input):
     return response['choices'][0]['message']['content']
 
 def play_audio(file_path):
+    print('<<<<<<<<<<<<<<<<<<<<<ENTERED PLAY AUDIO>>>>>>>>>>>>>>>>>>>>>')
     """Play the audio file using pygame and delete it after playing."""
     pygame.mixer.init()
     pygame.mixer.music.load(file_path)
     pygame.mixer.music.play()
     while pygame.mixer.music.get_busy():
-        time.sleep(1)
-    pygame.mixer.music.unload()
+        pygame.time.Clock().tick(10)
+    pygame.mixer.music.stop()
+    pygame.mixer.quit()
     os.remove(file_path)
 
+
+
 def main():
-    """Main function to run the conversational loop."""
-    print("Jarvis: Hello, I am Jarvis. How can I assist you today?")
+    print('<<<<<<<<<<<<<<<<<<<<<ENTERED MAIN>>>>>>>>>>>>>>>>>>>>>')
     
-    # Load TTS models and embeddings
-    tts.load_models()
     
+    tts.synthesize_speech("Hello, sir. How can I assist you today?", OUTPUT_PATH)
+    play_audio(OUTPUT_PATH)
+
+
     while True:
-        user_input = input("You: ")
-        if user_input.lower() in ['exit', 'quit']:
-            print("Jarvis: Goodbye!")
-            break
-        try:
-            response = generate_response(conversation_history, user_input)
-            print(f"Jarvis: {response}")
-            update_conversation_history("user", user_input)
+        detected_text = detect_hotword()
+        if detected_text:
+            print(f"Detected hotword text: {detected_text}")
+            update_conversation_history("user", detected_text)
+            response = generate_response(conversation_history, detected_text)
             update_conversation_history("assistant", response)
+            print(f"Assistant response: {response}")
+            
+            # Convert response to speech if needed
+            # Assuming tts.convert_text_to_speech is a function that converts text to speech and returns the file path
+            audio_file = tts.synthesize_speech(response, OUTPUT_PATH)
+            play_audio(OUTPUT_PATH)
+            time.sleep(0.5)
+        else:
+            print("No hotword detected.")
+            time.sleep(0.5)
 
-            # Synthesize and play the response
-            output_path = 'output_response.wav'
-            tts.synthesize_speech(response, output_path)
-            play_audio(output_path)
-
-        except Exception as e:
-            print(f'An error occurred during conversation: {e}')
 
 if __name__ == "__main__":
     main()

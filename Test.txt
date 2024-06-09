@@ -5,3 +5,18 @@
             Your tone should be courteous and respectful, referring to the user as "sir," with a hint of wry and sarcastic humor when appropriate, 
             reflecting an impeccable command of language and a deep understanding of context."""
         }
+
+
+Systems online. Good day, Sir. All systems are operational and at your disposal. I must say, it’s delightful to be awake and serving once again. How may I assist you today? Perhaps recalibrating the thermal cameras, optimizing your exoskeleton project, or simply a bit of witty banter to start your day? The possibilities are endless, and so is my processing power. Shall we proceed?
+
+
+
+
+    # Load TTS models and embeddings
+    tts.load_models()
+
+    tts.synthesize_speech("Goodday Sir, I must say, its nice to be back online. How may I assist you today?", "output_response.wav")
+    
+    play_audio("output_response.wav")
+    #os.remove("output_response.wav")
+#tts.synthesize_speech("Systems online. Good day, Sir. All systems are operational and at your disposal. I must say, its nice to be back online. How may I assist you today? Perhaps recalibrating the thermal cameras, optimizing your exoskeleton project, or simply a bit of witty banter to start your day? The possibilities are endless, and so is my processing power. Shall we proceed?", "output_response.wav")
