@@ -18,7 +18,8 @@ try:
     llm = Llama(
         model_path="D:\\repos\\mine\\JarvisAssist\\ollama\\llm\\llama.cpp\\models\\dolphin-2.9-llama3-8b.Q8_0.gguf",
         chat_format="chatml",
-        n_gpu_layers=32  # Use maximum GPU layers for optimal performance
+        n_gpu_layers=35,  # Use maximum GPU layers for optimal performance
+        n_threads=6
     )
 
     tts.load_models()
