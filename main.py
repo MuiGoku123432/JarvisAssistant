@@ -1,17 +1,14 @@
-import json
 import os
 import pygame
 from llama_cpp import Llama
 import tts
 from hotword_detection import main as detect_hotword
-from shared import HOTWORD_DETECTED
 from multiprocessing import Process, Value
-import ctypes
 import sys
 import time
 
 global OUTPUT_PATH 
-OUTPUT_PATH = 'output.wav'
+OUTPUT_PATH = r'D:/repos/jarvis-appV2/jarvis-app/src-tauri/target/debug/outputs/output.wav'
 
 # Initialize the Llama model
 try:
@@ -77,7 +74,7 @@ def main():
     print('ENTERED MAIN')
     
     tts.synthesize_speech("Hello, sir. How can I assist you today?", OUTPUT_PATH)
-    play_audio(OUTPUT_PATH)
+    #play_audio(OUTPUT_PATH)
 
     while True:
         detected_text = detect_hotword()
@@ -90,7 +87,7 @@ def main():
             
             # Convert response to speech if needed
             audio_file = tts.synthesize_speech(response, OUTPUT_PATH)
-            play_audio(OUTPUT_PATH)
+            #play_audio(OUTPUT_PATH)
             time.sleep(0.5)
         else:
             print("No hotword detected.")
