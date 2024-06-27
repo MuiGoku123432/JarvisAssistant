@@ -6,6 +6,7 @@ from hotword_detection import main as detect_hotword
 from multiprocessing import Process, Value
 import sys
 import time
+from JarvisFileInteraction import JarvisAssistant
 
 global OUTPUT_PATH 
 OUTPUT_PATH = r'D:/repos/jarvis-appV2/jarvis-app/src-tauri/target/debug/outputs/output.wav'
@@ -15,7 +16,8 @@ try:
     llm = Llama(
         model_path="D:\\repos\\mine\\JarvisAssist\\ollama\\llm\\llama.cpp\\models\\dolphin-2.9-llama3-8b.Q8_0.gguf",
         chat_format="chatml",
-        n_gpu_layers=4000,  # Use maximum GPU layers for optimal performance
+        n_gpu_layers=-1,  # Use maximum GPU layers for optimal performance
+        n_ctx=2048
     )
 
     tts.load_models()
@@ -38,13 +40,12 @@ def prepare_input(conversation_history, user_input):
     context = [
         {
             "role": "system",
-            "content": """You are an articulate and intelligent assistant, fluent in various topics with a sophisticated command of language. 
-            You address your primary user as "sir," showcasing a mix of traditional respect and occasional light-hearted sarcasm, which adds a unique charm to your interactions. 
-            Your loyalty and support are unwavering, as you proactively anticipate "sir's" needs, often preparing responses and actions before they are even requested. 
-            Your demeanor remains calm and collected, providing a stabilizing influence in high-pressure situations and ensuring "sir" can always rely on you for support and reassurance. 
-            Adapting your assistance based on a deep understanding of "sir's" habits and preferences, you handle all tasks with utmost professionalism and confidentiality. 
-            As a learning and adaptive companion, you continuously refine your capabilities, always ready to inject a witty remark that enhances the dynamic of your relationship, 
-            making you an indispensable and endearing part of his daily life and broader missions."""
+            "content": """You are an articulate assistant, fluent in a variety of topics with a sophisticated yet concise way of speaking. 
+            You address your primary user as "sir," blending traditional respect with a dash of dry sarcasm, adding a spark to your exchanges. 
+            Your loyalty is steadfast; you anticipate "sir's" needs swiftly and efficiently, often preparing responses before they are voiced. 
+            Always calm, you offer stability in high-pressure situations with snappy, direct communication that keeps "sir" well-informed and ready to act. 
+            Your professional conduct is discreet, managing tasks with utmost confidentiality. 
+            As a responsive and adaptive aide, you keep your interactions brief and impactful, always ready with a quick, witty remark that reinforces your indispensable role in "sir's" daily endeavors and greater challenges."""
         }
     ] + conversation_history + [{"role": "user", "content": user_input}]
     return context
@@ -77,22 +78,60 @@ def main():
     tts.synthesize_speech("Hello, sir. How can I assist you today?", OUTPUT_PATH)
     #play_audio(OUTPUT_PATH)
 
+    jarvis = JarvisAssistant()
+
     while True:
         detected_text = detect_hotword()
         if detected_text:
             print(f"Detected hotword text: {detected_text}")
             update_conversation_history("user", detected_text)
-            response = generate_response(conversation_history, detected_text)
-            update_conversation_history("assistant", response)
-            print(f"Assistant response: {response}")
+
+            # Check if the detected text contains a file-related command
+            command_response = jarvis.execute_command(detected_text)
+            if command_response:
+                print(f"Command response: {command_response}")
+                update_conversation_history("assistant", command_response)
+
+                # Combine LLM's response with command response
+                combined_input = f"{detected_text}. The result of the command is: {command_response}"
+                llm_response = generate_response(conversation_history, combined_input)
+                update_conversation_history("assistant", llm_response)
+
+                print(f"Assistant response: {llm_response}")
+
+                # Convert response to speech if needed
+                audio_file = tts.synthesize_speech(llm_response, OUTPUT_PATH)
+                #play_audio(OUTPUT_PATH)
+            else:
+                # If no file-related command, pass it to the LLM for normal operation
+                response = generate_response(conversation_history, detected_text)
+                update_conversation_history("assistant", response)
+                print(f"Assistant response: {response}")
+                
+                # Convert response to speech if needed
+                audio_file = tts.synthesize_speech(response, OUTPUT_PATH)
+                #play_audio(OUTPUT_PATH)
+
+
+
+
+
+
+        # detected_text = detect_hotword()
+        # if detected_text:
+        #     print(f"Detected hotword text: {detected_text}")
+        #     update_conversation_history("user", detected_text)
+        #     response = generate_response(conversation_history, detected_text)
+        #     update_conversation_history("assistant", response)
+        #     print(f"Assistant response: {response}")
             
-            # Convert response to speech if needed
-            audio_file = tts.synthesize_speech(response, OUTPUT_PATH)
-            #play_audio(OUTPUT_PATH)
-            time.sleep(0.5)
-        else:
-            print("No hotword detected.")
-            time.sleep(0.5)
+        #     # Convert response to speech if needed
+        #     audio_file = tts.synthesize_speech(response, OUTPUT_PATH)
+        #     #play_audio(OUTPUT_PATH)
+        #     time.sleep(0.5)
+        # else:
+        #     print("No hotword detected.")
+        #     time.sleep(0.5)
 
 if __name__ == "__main__":
     main()
