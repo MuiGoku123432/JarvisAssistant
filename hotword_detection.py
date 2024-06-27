@@ -2,6 +2,7 @@ import speech_recognition as sr
 import whisper
 import torch
 import multiprocessing as mp
+from JarvisFileInteraction import JarvisAssistant
 
 # Load the Whisper model
 audio_model = whisper.load_model("base.en")
@@ -52,6 +53,7 @@ def listen_for_hotword(hotword_detected, hotword_text):
             break
 
 def main():
+    jarvisFile = JarvisAssistant();
     hotword_detected = mp.Value('b', False)
     hotword_text = mp.Array('c', 1024)
 
