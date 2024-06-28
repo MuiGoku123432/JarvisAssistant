@@ -6,10 +6,12 @@ import subprocess
 
 
 class JarvisFileInteraction:
-    def __init__(self):
+    def __init__(self, exe_paths=None):
         self.current_directory = os.getcwd()
         shortcuts_folder = '../shortcuts'
         self.home_directory = os.path.expanduser('~')
+        self.exe_paths = exe_paths or []
+
 
     def change_directory(self, path):
         path = self.resolve_shortcut(path)
@@ -108,3 +110,23 @@ class JarvisFileInteraction:
             return f"File {filename} deleted."
         except Exception as e:
             return str(e)
+    def execute_app(self, app_name):
+        print('IN EXECUTE!!! APP NAME>>>>>>', app_name)
+        # Remove spaces and ensure app_name has .exe extension
+        app_name = app_name.replace(' ', '')
+        app_name = app_name.replace('.', '')
+        app_name = app_name.replace(',', '')
+        app_name = app_name.replace('?', '')
+        app_name = app_name if app_name.endswith('.exe') else f"{app_name}.exe"
+        # Ensure app_name has .exe extension
+        # Check in predefined exe paths
+        for exe_path in self.exe_paths:
+            full_path = os.path.join(exe_path, app_name)
+            print('FULL PATH>>>>>>>>>>>' + full_path)
+            if os.path.isfile(full_path):
+                try:
+                    subprocess.Popen([full_path])
+                    return f"Executed {app_name} from {full_path}"
+                except Exception as e:
+                    return str(e)
+        return "Application not found."

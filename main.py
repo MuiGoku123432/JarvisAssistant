@@ -78,7 +78,13 @@ def main():
     tts.synthesize_speech("Hello, sir. How can I assist you today?", OUTPUT_PATH)
     #play_audio(OUTPUT_PATH)
 
-    jarvis = JarvisAssistant()
+    exe_paths = [
+        "C:\\Users\\conno\\AppData\\Local\\Programs\\CurseForge_Windows",
+        "C:\\Program Files\\obs-studio\\bin\\64bit",
+        "C:\\Program Files (x86)\\Microsoft\\Edge\\Application"
+    ]
+    
+    jarvis = JarvisAssistant(exe_paths=exe_paths) 
 
     while True:
         detected_text = detect_hotword()

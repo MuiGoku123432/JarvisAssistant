@@ -2,20 +2,21 @@ import re
 from FileSystemInteraction import JarvisFileInteraction
 
 class JarvisAssistant:
-    def __init__(self):
-        self.file_interaction = JarvisFileInteraction()
+    def __init__(self, exe_paths=None):
+        self.file_interaction = JarvisFileInteraction(exe_paths=exe_paths)
 
     def parse_command(self, command):
         # Define regex patterns for different commands
         commands = {
             "change_directory": r"(change directory to) (.+)",
-            "open_directory": r"(open) (.+)",
+            "open_directory": r"(open directory) (.+)",
             "list_files": r"(list files|show files|what's here)",
             "read_file": r"(read file) (.+)",
             "create_file": r"(create file|new file) (.+)",
             "write_to_file": r"(write to file) (.+) with content (.+)",
             "search_files": r"(search files for|find files) (.+)",
-            "delete_file": r"(delete file|remove file) (.+)"
+            "delete_file": r"(delete file|remove file) (.+)",
+            "execute_app": r"(run app|execute) (.+)"
         }
 
         for action, pattern in commands.items():
@@ -25,10 +26,12 @@ class JarvisAssistant:
         
         return None, None
     def execute_command(self, command):
-        action, params = self.parse_command(command)
+        action, params = self.parse_command(command.lower())
         print('ACTION>>>>>>', action)
         print('PARAMS>>>>>>', params)
+        print('COMMAND>>>>>>', command)
         if action:
+            print('IN ACTION>>>>>>>')
             try:
                 if action == "change_directory":
                     response = self.file_interaction.change_directory(params[1])
@@ -46,6 +49,8 @@ class JarvisAssistant:
                     response = self.file_interaction.search_files(params[1])
                 elif action == "delete_file":
                     response = self.file_interaction.delete_file(params[1])
+                elif action == "execute_app":
+                    response = self.file_interaction.execute_app(params[1])
                 else:
                     response = "Command not recognized."
             except Exception as e:
