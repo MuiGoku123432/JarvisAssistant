@@ -11,23 +11,41 @@ from JarvisFileInteraction import JarvisAssistant
 global OUTPUT_PATH 
 OUTPUT_PATH = r'D:/repos/jarvis-appV2/jarvis-app/src-tauri/target/debug/outputs/output.wav'
 
-# Initialize the Llama model
-try:
-    llm = Llama(
-        model_path="D:\\repos\\mine\\JarvisAssist\\ollama\\llm\\llama.cpp\\models\\dolphin-2.9-llama3-8b.Q8_0.gguf",
-        chat_format="chatml",
-        n_gpu_layers=-1,  # Use maximum GPU layers for optimal performance
-        n_ctx=2048
-    )
 
-    tts.load_models()
-    print("Llama model initialized successfully.")
-except Exception as e:
-    print(f'Error initializing Llama model: {e}')
-    sys.exit(1)
-
-# Initialize the conversation history
+# Global variables for model and conversation history
+llm = None
 conversation_history = []
+
+def initialize_model():
+    global llm
+    if llm is None:
+        try:
+            llm = Llama(
+                model_path="D:\\repos\\mine\\JarvisAssist\\MyModels\\dolphin-2.9-llama3-8b.Q8_0.gguf",
+                chat_format="chatml",
+                n_gpu_layers=-1,  # Use maximum GPU layers for optimal performance
+                n_ctx=2048
+            )
+            tts.load_models()
+            print("Llama model initialized successfully.")
+        except Exception as e:
+            print(f'Error initializing Llama model: {e}')
+            sys.exit(1)
+# Initialize the Llama model
+# try:
+#     llm = Llama(
+#         # model_path="D:\\repos\\mine\\JarvisAssist\\ollama\\llm\\llama.cpp\\models\\dolphin-2.9-llama3-8b.Q8_0.gguf",
+#         model_path="D:\\repos\\mine\\JarvisAssist\\MyModels\\dolphin-2.9-llama3-8b.Q8_0.gguf",
+#         chat_format="chatml",
+#         n_gpu_layers=-1,  # Use maximum GPU layers for optimal performance
+#         n_ctx=2048
+#     )
+
+#     tts.load_models()
+#     print("Llama model initialized successfully.")
+# except Exception as e:
+#     print(f'Error initializing Llama model: {e}')
+#     sys.exit(1)
 
 def update_conversation_history(role, content):
     print('ENTERED UPDATE CONVERSATION HISTORY')
@@ -74,6 +92,8 @@ def play_audio(file_path):
 
 def main():
     print('ENTERED MAIN')
+    initialize_model()  # Ensure model is initialized only once
+
     
     tts.synthesize_speech("Hello, sir. How can I assist you today?", OUTPUT_PATH)
     #play_audio(OUTPUT_PATH)
