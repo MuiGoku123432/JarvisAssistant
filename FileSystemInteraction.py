@@ -2,6 +2,9 @@ import os
 import glob
 import winshell # type: ignore
 import subprocess
+import datetime
+import python_weather
+import asyncio
 
 
 
@@ -130,3 +133,30 @@ class JarvisFileInteraction:
                 except Exception as e:
                     return str(e)
         return "Application not found."
+    
+    def get_time(self):
+        time = datetime.datetime.now().strftime("%Y-%m-%d %I:%M %p")
+        return time
+    
+    async def weather(self):
+        # declare the client. the measuring unit used defaults to the metric system (celcius, km/h, etc.)
+        async with python_weather.Client(unit=python_weather.IMPERIAL) as client:
+            # fetch a weather forecast from a city
+            weather = await client.get('Omaha, AR')
+
+            # # returns the current day's forecast temperature (int)
+            # temp = str(weather.temperature)
+
+            # # get the weather forecast for a few days
+            # for daily in weather.daily_forecasts:
+            #     daily = daily
+
+            # # hourly forecasts
+            # for hourly in daily.hourly_forecasts:
+            #     hourly = hourly
+
+            # weather = f'The current temperature is {temp} degrees. The next 5 days forecast is {daily} and the next 24 hours forecast is {hourly}'
+            return str(weather)
+        
+    def get_weather(self):
+        return asyncio.run(self.weather())
