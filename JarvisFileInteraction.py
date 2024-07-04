@@ -16,7 +16,9 @@ class JarvisAssistant:
             "write_to_file": r"(write to file) (.+) with content (.+)",
             "search_files": r"(search files for|find files) (.+)",
             "delete_file": r"(delete file|remove file) (.+)",
-            "execute_app": r"(run app|execute) (.+)"
+            "execute_app": r"(run app|execute) (.+)",
+            "get_time": r"(what time)",
+            "get_weather": r"(what's the weather|what is the weather like|what's the weather like today)",
         }
 
         for action, pattern in commands.items():
@@ -51,6 +53,10 @@ class JarvisAssistant:
                     response = self.file_interaction.delete_file(params[1])
                 elif action == "execute_app":
                     response = self.file_interaction.execute_app(params[1])
+                elif action == "get_time":
+                    response = self.file_interaction.get_time()
+                elif action == "get_weather":
+                    response = self.file_interaction.get_weather()
                 else:
                     response = "Command not recognized."
             except Exception as e:
