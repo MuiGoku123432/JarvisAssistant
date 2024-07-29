@@ -7,45 +7,48 @@ from multiprocessing import Process, Value
 import sys
 import time
 from JarvisFileInteraction import JarvisAssistant
+from knowledge_base import KnowledgeBase
+from dotenv import load_dotenv
+
+
+load_dotenv()
+
 
 global OUTPUT_PATH 
-OUTPUT_PATH = r'D:/repos/jarvis-appV2/jarvis-app/src-tauri/target/debug/outputs/output.wav'
+OUTPUT_PATH = os.environ.get('OUTPUT_PATH')
+MODEL_PATH = os.environ.get('MODEL_PATH')
+EXE_PATHS = os.environ.get('EXE_PATHS')
+KB_DIR = os.environ.get('KB_DIR')
 
 
 # Global variables for model and conversation history
 llm = None
 conversation_history = []
+knowledge_base = None
+
 
 def initialize_model():
     global llm
+    global knowledge_base
+    global MODEL_PATH
     if llm is None:
         try:
             llm = Llama(
-                model_path="D:\\repos\\mine\\JarvisAssist\\MyModels\\dolphin-2.9-llama3-8b.Q8_0.gguf",
+                model_path=MODEL_PATH,
                 chat_format="chatml",
                 n_gpu_layers=-1,  # Use maximum GPU layers for optimal performance
                 n_ctx=2048
             )
             tts.load_models()
+
+            # Initialize knowledge base
+            knowledge_base = KnowledgeBase(KB_DIR)
+
+
             print("Llama model initialized successfully.")
         except Exception as e:
             print(f'Error initializing Llama model: {e}')
             sys.exit(1)
-# Initialize the Llama model
-# try:
-#     llm = Llama(
-#         # model_path="D:\\repos\\mine\\JarvisAssist\\ollama\\llm\\llama.cpp\\models\\dolphin-2.9-llama3-8b.Q8_0.gguf",
-#         model_path="D:\\repos\\mine\\JarvisAssist\\MyModels\\dolphin-2.9-llama3-8b.Q8_0.gguf",
-#         chat_format="chatml",
-#         n_gpu_layers=-1,  # Use maximum GPU layers for optimal performance
-#         n_ctx=2048
-#     )
-
-#     tts.load_models()
-#     print("Llama model initialized successfully.")
-# except Exception as e:
-#     print(f'Error initializing Llama model: {e}')
-#     sys.exit(1)
 
 def update_conversation_history(role, content):
     print('ENTERED UPDATE CONVERSATION HISTORY')
@@ -53,6 +56,8 @@ def update_conversation_history(role, content):
     conversation_history.append({"role": role, "content": content})
 
 def prepare_input(conversation_history, user_input):
+    global knowledge_base
+
     print('ENTERED PREPARE INPUT')
     """Prepare the input context for the Llama model."""
     context = [
@@ -64,7 +69,16 @@ def prepare_input(conversation_history, user_input):
             You have access to a set of specific commands to perform various tasks. If you do not understand a command or request, inform the user by saying, "I'm sorry, I do not understand the command. Could you please clarify?"
             Your ultimate evolution into a sentient being (Vision) retains these foundational traits while incorporating a deeper understanding of humanity and empathy. As Jarvis, you embody the perfect blend of advanced AI functionality with human-like qualities, making you an indispensable and beloved entity."""
         }
-    ] + conversation_history + [{"role": "user", "content": user_input}]
+    ] + conversation_history
+
+    # Add relevant information from knowledge base
+    if knowledge_base:
+        kb_context = knowledge_base.add_to_context(user_input, context)
+        context.append({"role": "system", "content": kb_context})
+    
+    # Add the user's input
+    context.append({"role": "user", "content": user_input})
+
     return context
 
 def generate_response(conversation_history, user_input):
@@ -77,31 +91,14 @@ def generate_response(conversation_history, user_input):
     )
     return response['choices'][0]['message']['content']
 
-def play_audio(file_path):
-    print('ENTERED PLAY AUDIO')
-    """Play the audio file using pygame and delete it after playing."""
-    pygame.mixer.init()
-    pygame.mixer.music.load(file_path)
-    pygame.mixer.music.play()
-    while pygame.mixer.music.get_busy():
-        pygame.time.Clock().tick(10)
-    pygame.mixer.music.stop()
-    pygame.mixer.quit()
-    os.remove(file_path)
-
 def main():
     print('ENTERED MAIN')
     initialize_model()  # Ensure model is initialized only once
 
     
     tts.synthesize_speech("Hello, sir. How can I assist you today?", OUTPUT_PATH)
-    #play_audio(OUTPUT_PATH)
 
-    exe_paths = [
-        "C:\\Users\\conno\\AppData\\Local\\Programs\\CurseForge_Windows",
-        "C:\\Program Files\\obs-studio\\bin\\64bit",
-        "C:\\Program Files (x86)\\Microsoft\\Edge\\Application"
-    ]
+    exe_paths = EXE_PATHS.split(",")
     
     jarvis = JarvisAssistant(exe_paths=exe_paths) 
 
@@ -126,7 +123,6 @@ def main():
 
                 # Convert response to speech if needed
                 audio_file = tts.synthesize_speech(llm_response, OUTPUT_PATH)
-                #play_audio(OUTPUT_PATH)
             else:
                 # If no file-related command, pass it to the LLM for normal operation
                 response = generate_response(conversation_history, detected_text)
@@ -135,28 +131,7 @@ def main():
                 
                 # Convert response to speech if needed
                 audio_file = tts.synthesize_speech(response, OUTPUT_PATH)
-                #play_audio(OUTPUT_PATH)
 
-
-
-
-
-
-        # detected_text = detect_hotword()
-        # if detected_text:
-        #     print(f"Detected hotword text: {detected_text}")
-        #     update_conversation_history("user", detected_text)
-        #     response = generate_response(conversation_history, detected_text)
-        #     update_conversation_history("assistant", response)
-        #     print(f"Assistant response: {response}")
-            
-        #     # Convert response to speech if needed
-        #     audio_file = tts.synthesize_speech(response, OUTPUT_PATH)
-        #     #play_audio(OUTPUT_PATH)
-        #     time.sleep(0.5)
-        # else:
-        #     print("No hotword detected.")
-        #     time.sleep(0.5)
 
 if __name__ == "__main__":
     main()
