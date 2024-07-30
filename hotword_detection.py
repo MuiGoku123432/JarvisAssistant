@@ -3,6 +3,7 @@ import whisper
 import torch
 import multiprocessing as mp
 from JarvisFileInteraction import JarvisAssistant
+import time
 
 # Load the Whisper model
 audio_model = whisper.load_model("base.en")
@@ -52,18 +53,37 @@ def listen_for_hotword(hotword_detected, hotword_text):
             hotword_detected.value = True
             break
 
-def main():
-    jarvisFile = JarvisAssistant();
-    hotword_detected = mp.Value('b', False)
-    hotword_text = mp.Array('c', 1024)
+def listen_without_hotword(duration=DURATION):
+    time.sleep(5)
+    recognizer = sr.Recognizer()
+    microphone = sr.Microphone(sample_rate=16000, device_index=0)
 
-    listen_process = mp.Process(target=listen_for_hotword, args=(hotword_detected, hotword_text))
-    listen_process.start()
-    listen_process.join()
+    print("Listening for response...")
 
-    if hotword_detected.value:
-        detected_text = hotword_text.value.decode('utf-8').strip()
-        return detected_text
+    audio = record_audio(recognizer, microphone, duration)
+    transcription = transcribe_audio(audio, recognizer, audio_model)
+
+    print(f"Transcription result: {transcription}")
+    
+    return transcription.strip()
+
+def main(use_hotword=True):
+    if use_hotword:
+        jarvisFile = JarvisAssistant();
+        hotword_detected = mp.Value('b', False)
+        hotword_text = mp.Array('c', 1024)
+
+        listen_process = mp.Process(target=listen_for_hotword, args=(hotword_detected, hotword_text))
+        listen_process.start()
+        listen_process.join()
+
+        if hotword_detected.value:
+            detected_text = hotword_text.value.decode('utf-8').strip()
+            return detected_text
+    else:
+        return listen_without_hotword()
+    
+    return None
 
 if __name__ == "__main__":
     detected_text = main()
