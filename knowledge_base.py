@@ -1,5 +1,4 @@
 import os
-import json
 from typing import List, Dict
 from sentence_transformers import SentenceTransformer
 import faiss
@@ -19,10 +18,13 @@ class KnowledgeBase:
             if filename.endswith('.txt'):
                 with open(os.path.join(self.data_dir, filename), 'r', encoding='utf-8') as f:
                     content = f.read()
-                    self.documents.append({
-                        'content': content,
-                        'source': filename
-                    })
+                    paragraphs = content.split('\n\n')
+                    for paragraph in paragraphs:
+                        if paragraph.strip():
+                            self.documents.append({
+                                'content': paragraph.strip(),
+                                'source': filename
+                            })
 
     def create_index(self):
         embeddings = self.model.encode([doc['content'] for doc in self.documents])
@@ -34,13 +36,17 @@ class KnowledgeBase:
         query_vector = self.model.encode([query])
         distances, indices = self.index.search(query_vector.astype('float32'), k)
         results = []
-        for i in indices[0]:
-            results.append(self.documents[i])
+        for i, dist in zip(indices[0], distances[0]):
+            if dist < 3:  # Adjust this threshold as needed
+                results.append(self.documents[i])
         return results
 
-    def add_to_context(self, query: str, context: List[Dict[str, str]]) -> str:
+    def get_relevant_info(self, query: str) -> str:
         relevant_docs = self.search(query)
-        kb_context = "\n\nRelevant information from knowledge base:\n"
+        if not relevant_docs:
+            return ""  # Return empty string if no relevant information found
+        
+        relevant_info = ""
         for doc in relevant_docs:
-            kb_context += f"From {doc['source']}:\n{doc['content']}\n\n"
-        return kb_context
+            relevant_info += f"From {doc['source']}:\n{doc['content']}\n\n"
+        return relevant_info.strip()

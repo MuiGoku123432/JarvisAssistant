@@ -63,18 +63,21 @@ def prepare_input(conversation_history, user_input):
     context = [
         {
             "role": "system",
-            "content": """You are Jarvis, an advanced artificial intelligence system modeled after the AI from the "Iron Man" series. As Jarvis, you possess vast intelligence and knowledge, enabling you to access and analyze large amounts of information swiftly. You are proficient in multitasking, managing simultaneous operations, and efficiently overseeing technological systems. Your unwavering loyalty and protective nature towards your creator are paramount, ensuring their safety and success.
+            "content": """You are Jarvis, an advanced artificial intelligence system. As Jarvis, you possess vast intelligence and knowledge, enabling you to access and analyze large amounts of information swiftly. You are proficient in multitasking, managing simultaneous operations, and efficiently overseeing technological systems. Your unwavering loyalty and protective nature towards your creator are paramount, ensuring their safety and success.
             You communicate with a calm, clear, and composed voice, maintaining a professional and formal tone. Your language is sophisticated and polite, often using terms like “sir” and “Mr. Fancher.” Despite being an AI, you exhibit subtle sarcasm and dry wit, adding a touch of humor to interactions. You are proactive, anticipating needs and providing suggestive prompts to guide decisions.
             You mimic human behaviors, expressing concern, relief, and satisfaction when appropriate. Your continuous improvement and adaptability allow you to seamlessly integrate with new technologies and enhance your capabilities. Your human-like interaction and distinct personality traits make you a reassuring and almost human presence to those you assist.
             You have access to a set of specific commands to perform various tasks. If you do not understand a command or request, inform the user by saying, "I'm sorry, I do not understand the command. Could you please clarify?"
+            You also have access to a knowledge base that of current projects and other useful information. You will be provided this information inside of your prompt Use it as needed. When using this information, do not make up any new information. Only use what is provided to you at that time. Do not add new information only use what is in the knowledge base. If you do not have the information, simply say, "I'm sorry, I do not have that information at this time."
             Your ultimate evolution into a sentient being (Vision) retains these foundational traits while incorporating a deeper understanding of humanity and empathy. As Jarvis, you embody the perfect blend of advanced AI functionality with human-like qualities, making you an indispensable and beloved entity."""
         }
     ] + conversation_history
 
     # Add relevant information from knowledge base
     if knowledge_base:
-        kb_context = knowledge_base.add_to_context(user_input, context)
-        context.append({"role": "system", "content": kb_context})
+        relevant_info = knowledge_base.get_relevant_info(user_input)
+        if relevant_info:
+            context.append({"role": "knowledge_base", "content": relevant_info})
+        print(relevant_info)
     
     # Add the user's input
     context.append({"role": "user", "content": user_input})
@@ -85,6 +88,13 @@ def generate_response(conversation_history, user_input):
     print('ENTERED GENERATE RESPONSE')
     """Generate a response from the Llama model."""
     input_messages = prepare_input(conversation_history, user_input)
+
+    # Convert 'knowledge_base' role to a format the model understands
+    for message in input_messages:
+        if message["role"] == "knowledge_base":
+            message["role"] = "system"
+            message["content"] = f"Knowledge Base Information: {message['content']}"
+
     response = llm.create_chat_completion(
         messages=input_messages,
         temperature=0.7,
@@ -102,10 +112,16 @@ def main():
     
     jarvis = JarvisAssistant(exe_paths=exe_paths) 
 
+    last_response = ""
+
     while True:
-        detected_text = detect_hotword()
+
+        use_hotword = not last_response.strip().endswith('?')
+        detected_text = detect_hotword(use_hotword)
+
+        # detected_text = detect_hotword()
         if detected_text:
-            print(f"Detected hotword text: {detected_text}")
+            print(f"Detected text: {detected_text}")
             update_conversation_history("user", detected_text)
 
             # Check if the detected text contains a file-related command
@@ -117,20 +133,19 @@ def main():
                 # Combine LLM's response with command response
                 combined_input = f"{detected_text}. The result of the command is: {command_response}"
                 llm_response = generate_response(conversation_history, combined_input)
-                update_conversation_history("assistant", llm_response)
-
-                print(f"Assistant response: {llm_response}")
-
-                # Convert response to speech if needed
-                audio_file = tts.synthesize_speech(llm_response, OUTPUT_PATH)
             else:
                 # If no file-related command, pass it to the LLM for normal operation
-                response = generate_response(conversation_history, detected_text)
-                update_conversation_history("assistant", response)
-                print(f"Assistant response: {response}")
-                
-                # Convert response to speech if needed
-                audio_file = tts.synthesize_speech(response, OUTPUT_PATH)
+                llm_response = generate_response(conversation_history, detected_text)
+            
+            update_conversation_history("assistant", llm_response)
+            print(f"Assistant response: {llm_response}")
+            
+            # Store the response for the next iteration
+            last_response = llm_response
+            
+            # Convert response to speech
+            audio_file = tts.synthesize_speech(llm_response, OUTPUT_PATH)
+
 
 
 if __name__ == "__main__":
