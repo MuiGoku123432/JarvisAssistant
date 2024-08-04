@@ -12,6 +12,11 @@ print("Model loaded.\n")
 HOTWORD = "jarvis"
 DURATION = 5  # Duration in seconds for recording audio
 
+def list_microphones():
+    """List available microphones."""
+    mic_list = sr.Microphone.list_microphone_names()
+    return [{"index": i, "name": name} for i, name in enumerate(mic_list)]
+
 def record_audio(recognizer, microphone, duration):
     """Record audio from the microphone."""
     print("Recording audio...")
@@ -50,8 +55,12 @@ def listen_for_hotword(hotword_detected, hotword_text):
             print(f"Hotword '{HOTWORD}' detected!")
             with hotword_text.get_lock():
                 hotword_text.value = transcription.encode('utf-8')
+                
             hotword_detected.value = True
-            break
+            return True
+        else:
+            hotword_detected.value = False
+            return False
 
 def listen_without_hotword(duration=DURATION):
     time.sleep(5)
