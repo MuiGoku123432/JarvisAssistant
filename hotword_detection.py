@@ -4,6 +4,12 @@ import torch
 import multiprocessing as mp
 from JarvisFileInteraction import JarvisAssistant
 import time
+import os
+import soundfile as sf
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Load the Whisper model
 audio_model = whisper.load_model("base.en")
@@ -26,8 +32,30 @@ def record_audio(recognizer, microphone, duration):
         audio = recognizer.record(source, duration=duration)
     return audio
 
-def transcribe_audio(audio, recognizer, audio_model):
+# def transcribe_audio(audio, audio_model):
+#     """Transcribe the recorded audio using Whisper model."""
+#     print("Transcribing audio...")
+#     audio_data = sr.AudioData(audio.get_raw_data(), audio.sample_rate, audio.sample_width)
+#     wav_data = audio_data.get_wav_data()
+#     temp_file = "temp_audio.wav"
+    
+#     with open(temp_file, 'wb') as f:
+#         f.write(wav_data)
+    
+#     result = audio_model.transcribe(temp_file, fp16=torch.cuda.is_available())
+#     return result['text'].strip()
+def transcribe_audio(audio_file, audio_model):
+    recognizer = sr.Recognizer()
+
+
     """Transcribe the recorded audio using Whisper model."""
+    logger.info(type(audio_file))
+    audioPre = sr.AudioFile(audio_file)
+    logger.info(type(audioPre))
+    with audioPre as source:
+        audio = recognizer.record(source)
+        logger.info(type(audio))
+
     print("Transcribing audio...")
     audio_data = sr.AudioData(audio.get_raw_data(), audio.sample_rate, audio.sample_width)
     wav_data = audio_data.get_wav_data()
@@ -39,38 +67,23 @@ def transcribe_audio(audio, recognizer, audio_model):
     result = audio_model.transcribe(temp_file, fp16=torch.cuda.is_available())
     return result['text'].strip()
 
-def listen_for_hotword(hotword_detected, hotword_text):
-    recognizer = sr.Recognizer()
-    microphone = sr.Microphone(sample_rate=16000, device_index=0)
-
+def listen_for_hotword(audio_data, sample_rate):
     print("Listening for the hotword...\n")
+    transcription = transcribe_audio(audio_data, audio_model)
 
-    while True:
-        audio = record_audio(recognizer, microphone, DURATION)
-        transcription = transcribe_audio(audio, recognizer, audio_model)
+    logger.info(f"Transcription result: {transcription}")
+    
+    if HOTWORD.lower() in transcription.lower():
+        print(f"Hotword '{HOTWORD}' detected!")
+        return transcription.strip()            
+    else:
+        return None
 
-        print(f"Transcription result: {transcription}")
-        
-        if HOTWORD.lower() in transcription.lower():
-            print(f"Hotword '{HOTWORD}' detected!")
-            with hotword_text.get_lock():
-                hotword_text.value = transcription.encode('utf-8')
-                
-            hotword_detected.value = True
-            return True
-        else:
-            hotword_detected.value = False
-            return False
-
-def listen_without_hotword(duration=DURATION):
+def listen_without_hotword(audio_data, sample_rate, duration=DURATION):
     time.sleep(5)
-    recognizer = sr.Recognizer()
-    microphone = sr.Microphone(sample_rate=16000, device_index=0)
 
     print("Listening for response...")
-
-    audio = record_audio(recognizer, microphone, duration)
-    transcription = transcribe_audio(audio, recognizer, audio_model)
+    transcription = transcribe_audio(audio_data, audio_model)
 
     print(f"Transcription result: {transcription}")
     

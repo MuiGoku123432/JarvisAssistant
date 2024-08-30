@@ -61,7 +61,7 @@ def synthesize_speech(text, output_path, speed=1.0):
             output_path=output_path,
             message=encode_message
         )
-
+        return output_path
         print(f'Speech synthesis complete. Output saved to {output_path}')
     except Exception as e:
         print(f'An error occurred during speech synthesis: {e}')
