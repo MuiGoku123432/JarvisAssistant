@@ -10,6 +10,19 @@ import os
 from dotenv import load_dotenv
 from multiprocessing import Value, Array
 import time
+import base64
+from urllib.parse import parse_qs
+from flask import Flask, send_file, request
+from flask_cors import CORS
+import threading
+import uuid
+import soundfile as sf
+import io
+import numpy as np
+import wave
+
+
+#DURATION = 5  # Duration in seconds
 
 class ListeningState:
     IDLE = 0
@@ -24,7 +37,6 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-OUTPUT_PATH = os.environ.get('OUTPUT_PATH')
 MODEL_PATH = os.environ.get('MODEL_PATH')
 EXE_PATHS = os.environ.get('EXE_PATHS').split(",")
 KB_DIR = os.environ.get('KB_DIR')
@@ -37,33 +49,111 @@ initialize_model()
 tts.load_models()
 logger.info("Models initialized successfully.")
 
-tts.synthesize_speech("Hello, sir. How can I assist you today?", OUTPUT_PATH)
+
 
 last_response = ""
+
+# Initialize Flask app
+app = Flask(__name__)
+CORS(app)
+AUDIO_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'audio_files')
+os.makedirs(AUDIO_DIR, exist_ok=True)
+
+tts.synthesize_speech("Hello, sir. How can I assist you today?", AUDIO_DIR)
+
+UPLOAD_FOLDER = 'temp_audio'
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
+
+@app.route('/upload_audio', methods=['POST'])
+def upload_audio():
+    if 'audio' not in request.files:
+        return 'No audio file', 400
+    
+    file = request.files['audio']
+    if file.filename == '':
+        return 'No selected file', 400
+    
+    if file:
+        filename = 'temp_audio.wav'
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        file.save(filepath)
+        logger.info(f"Saved audio file: {filepath}")
+        logger.info(f"File size: {os.path.getsize(filepath)} bytes")
+        
+        try:
+            with wave.open(filepath, 'rb') as wav_file:
+                channels = wav_file.getnchannels()
+                sample_width = wav_file.getsampwidth()
+                framerate = wav_file.getframerate()
+                frames = wav_file.getnframes()
+            
+            logger.info(f"Uploaded audio file: {filepath}")
+            logger.info(f"Channels: {channels}, Sample Width: {sample_width}, Framerate: {framerate}, Frames: {frames}")
+            
+            return 'File uploaded and verified successfully', 200
+        except EOFError:
+            logger.error(f"EOFError: The WAV file appears to be empty or corrupted: {filepath}")
+            return 'Invalid WAV file: File is empty or corrupted', 400
+        except wave.Error as e:
+            logger.error(f"Wave error: {str(e)}")
+            return f'Invalid WAV file: {str(e)}', 400
+        except Exception as e:
+            logger.error(f"Unexpected error processing WAV file: {str(e)}")
+            return 'Error processing audio file', 500
+
+@app.route('/audio/<filename>')
+def serve_audio(filename):
+    return send_file(os.path.join(AUDIO_DIR, filename), mimetype='audio/wav')
 
 # Create shared variables for hotword detection
 hotword_detected = Value('b', False)
 hotword_text = Array('c', 1024)
 
+def cleanup_old_audio_files(max_age_hours=24):
+    current_time = time.time()
+    for filename in os.listdir(AUDIO_DIR):
+        file_path = os.path.join(AUDIO_DIR, filename)
+        if os.path.isfile(file_path):
+            file_age = current_time - os.path.getmtime(file_path)
+            if file_age > max_age_hours * 3600:
+                os.remove(file_path)
+                logger.info(f"Deleted old audio file: {filename}")
+
+async def periodic_cleanup():
+    while True:
+        cleanup_old_audio_files()
+        await asyncio.sleep(3600)  # Sleep for 1 hour
+
+
 async def listen_for_input(use_hotword):
-    global hotword_detected, hotword_text
+    filepath = os.path.join(UPLOAD_FOLDER, 'temp_audio.wav')
+    logger.info(f"Processing audio file: {filepath}")
+
+    if not os.path.exists(filepath):
+        logger.error(f"Audio file not found: {filepath}")
+        return None
     
-    if use_hotword:
-        logger.info("Listening for hotword...")
-        hotword_detected.value = False
-        hotword_text.value = b''
-        await asyncio.to_thread(listen_for_hotword, hotword_detected, hotword_text)
-        if hotword_detected.value:
-            return hotword_text.value.decode('utf-8').strip()
-    else:
-        logger.info("Listening without hotword...")
-        return await asyncio.to_thread(listen_without_hotword)
-    
-    return None
+    sample_rate = 16000  # Assuming 16kHz sample rate, adjust if different
+
+    try:
+        if use_hotword:
+            logger.info("Checking for hotword in mobile audio...")
+            return await asyncio.to_thread(listen_for_hotword, filepath, sample_rate)
+        else:
+            logger.info("Transcribing mobile audio without hotword check...")
+            return await asyncio.to_thread(listen_without_hotword, filepath, sample_rate)
+    except Exception as e:
+        logger.error(f"Error processing mobile audio: {str(e)}")
+        return None
+    finally:
+        # Clean up the temporary file
+        if os.path.exists(filepath):
+            os.remove(filepath)
+            logger.info(f"Deleted temporary audio file: {filepath}")
 
 async def process_command(websocket, user_input):
     global last_response
-    
     
     logger.info(f"Processing command: {user_input}")
     command_response = jarvis.execute_command(user_input)
@@ -80,61 +170,86 @@ async def process_command(websocket, user_input):
     update_conversation_history("assistant", llm_response)
     last_response = llm_response
     
-    audio_file = tts.synthesize_speech(llm_response, OUTPUT_PATH)
-
+    logger.info(f"Generating speech for response: {llm_response[:50]}...")
+    
+    audio_filename = f"output_{int(time.time())}.wav"
+    audio_file_path = os.path.join(AUDIO_DIR, audio_filename)
+    
+    tts.synthesize_speech(llm_response, audio_file_path)
+    
+    if not os.path.exists(audio_file_path):
+        logger.error(f"Failed to generate audio file or file does not exist: {audio_file_path}")
+        return None
+    
+    audio_url = f"http://192.168.254.23:5000/audio/{audio_filename}"
+    
     logger.info(f"Finished processing command: {user_input}")
     logger.info(f"Sending response: {llm_response[:50]}...")
     
-    await websocket.send(json.dumps({
+    return {
         "type": "chat_response",
         "response": llm_response,
-        "audio_path": OUTPUT_PATH
-    }))
+        "audio_url": audio_url
+    }
 
 async def handle_client(websocket, path):
-    global last_response, listening_state
+    global listening_state, last_response
+    
+    logger.info("New client connected")
     
     try:
         while True:
             message = await websocket.recv()
             data = json.loads(message)
-            command = data.get('command')
-
-            if command == 'listen' and listening_state.value == ListeningState.IDLE:
+            
+            if data['type'] == 'listen':
                 listening_state.value = ListeningState.LISTENING
                 use_hotword = not last_response.strip().endswith('?')
-                detected_text = await listen_for_input(use_hotword)
+                await websocket.send(json.dumps({"type": "start_listening"}))
                 
-                if detected_text:
-                    logger.info(f"Detected text: {detected_text}")
-                    await websocket.send(json.dumps({
-                        "type": "listen_response",
-                        "detected_text": detected_text
-                    }))
+            elif data['type'] == 'process_audio':
+                try:
                     listening_state.value = ListeningState.PROCESSING
-                    await process_command(websocket, detected_text)
+                    filepath = os.path.join(UPLOAD_FOLDER, 'temp_output.wav')
+                    
+                    use_hotword = not last_response.strip().endswith('?')
+                    detected_text = await listen_for_input(use_hotword)
+
+                    if detected_text:
+                        logger.info(f"Detected text: {detected_text}")
+                        await websocket.send(json.dumps({
+                            "type": "transcription_result",
+                            "text": detected_text
+                        }))
+                        response = await process_command(websocket, detected_text)
+                        if response:
+                            await websocket.send(json.dumps(response))
+                    else:
+                        logger.info("No valid speech detected")
+                        await websocket.send(json.dumps({
+                            "type": "transcription_result",
+                            "text": None
+                        }))
+                
+                except Exception as e:
+                    logger.error(f"Error processing audio: {str(e)}")
+                finally:
                     listening_state.value = ListeningState.IDLE
-                else:
-                    logger.info("No speech detected")
-                    await websocket.send(json.dumps({
-                        "type": "listen_response",
-                        "detected_text": None
-                    }))
-                    listening_state.value = ListeningState.IDLE
-            elif command == 'chat' and listening_state.value == ListeningState.IDLE:
-                listening_state.value = ListeningState.PROCESSING
-                user_input = data.get('message')
-                await process_command(websocket, user_input)
-                listening_state.value = ListeningState.IDLE
-            elif command == 'stop_listening':
-                logger.info("Stopping listening")
+                    # Ensure the file is deleted even if an exception occurred
+                    if os.path.exists(filepath):
+                        os.remove(filepath)
+                        logger.info(f"Deleted temporary audio file: {filepath}")
+                    await websocket.send(json.dumps({"type": "start_listening"}))
+
+            elif data['type'] == 'stop_listening': 
                 listening_state.value = ListeningState.IDLE
                 await websocket.send(json.dumps({
                     "type": "stop_listening_response",
                     "status": "ok"
                 }))
+
             else:
-                logger.info(f"Ignoring command {command} due to current state: {listening_state.value}")
+                logger.warning(f"Received unknown message type: {data['type']}")
 
     except websockets.exceptions.ConnectionClosed:
         logger.info("WebSocket connection closed")
@@ -142,11 +257,22 @@ async def handle_client(websocket, path):
         logger.error(f"Error in handle_client: {e}")
     finally:
         listening_state.value = ListeningState.IDLE
+        logger.info("Client disconnected")
+
+def run_flask():
+    app.run(host='0.0.0.0', port=5000)
 
 async def main():
     logger.info("Starting WebSocket server...")
     server = await websockets.serve(handle_client, "0.0.0.0", 8765)
     logger.info("WebSocket server is running on ws://localhost:8765")
+    
+    # Start Flask server in a separate thread
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.start()
+
+    asyncio.create_task(periodic_cleanup())
+
     await server.wait_closed()
 
 if __name__ == "__main__":
