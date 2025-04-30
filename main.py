@@ -2,7 +2,7 @@ import os
 import pygame
 from llama_cpp import Llama
 import tts
-from hotword_detection import main as detect_hotword
+from hotword_detection import listen_for_hotword, listen_without_hotword
 from multiprocessing import Process, Value
 import sys
 import time
@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+SAMPLE_RATE = 16000;
 
 global OUTPUT_PATH 
 OUTPUT_PATH = os.environ.get('OUTPUT_PATH')
@@ -118,7 +119,12 @@ def main():
     while True:
 
         use_hotword = not last_response.strip().endswith('?')
-        detected_text = detect_hotword(use_hotword)
+        # decide which transcriber to call on the temp file
+        filename = os.path.join('temp_audio', 'temp_audio.wav')
+        if use_hotword:
+            detected_text = listen_for_hotword(filename, SAMPLE_RATE)
+        else:
+            detected_text = listen_without_hotword(filename, SAMPLE_RATE)
 
         # detected_text = detect_hotword()
         if detected_text:

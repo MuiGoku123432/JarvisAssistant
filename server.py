@@ -20,6 +20,8 @@ import soundfile as sf
 import io
 import numpy as np
 import wave
+from flask import jsonify
+from collections.abc import Sequence
 
 
 #DURATION = 5  # Duration in seconds
@@ -157,12 +159,31 @@ async def process_command(websocket, user_input):
     
     logger.info(f"Processing command: {user_input}")
     command_response = jarvis.execute_command(user_input)
+    logger.info(f"Raw command_response type: {type(command_response)}, value: {command_response}")
+
+
+    if isinstance(command_response, Sequence) and not isinstance(command_response, str):
+         # 1) flatten the list into a single string block
+        files_block = "\n".join(f"- {p}" for p in command_response) or "*(none found)*"
+
+        # 2) update history with raw results as system info
+        update_conversation_history("user", user_input)
+        update_conversation_history("assistant", f"Search results:\n{files_block}")
+
+        # 3) ask the LLM to craft a friendly reaction
+        prompt = (
+            "I ran a file search for your query and got the following results:\n"
+            f"{files_block}\n\n"
+            "Please respond back to the user with a friendly summary and next steps."
+        )
+        llm_response = generate_response(conversation_history, prompt)
     
-    if command_response:
+    elif command_response:
         update_conversation_history("user", user_input)
         update_conversation_history("assistant", command_response)
         combined_input = f"{user_input}. The result of the command is: {command_response}"
         llm_response = generate_response(conversation_history, combined_input)
+
     else:
         update_conversation_history("user", user_input)
         llm_response = generate_response(conversation_history, user_input)
@@ -221,9 +242,13 @@ async def handle_client(websocket, path):
                             "type": "transcription_result",
                             "text": detected_text
                         }))
-                        response = await process_command(websocket, detected_text)
-                        if response:
-                            await websocket.send(json.dumps(response))
+                        # response = await process_command(websocket, detected_text)
+                        # if response:
+                        #     await websocket.send(json.dumps(response))
+                        result = await process_command(websocket, detected_text)
+                        # if process_command already sent a file_response, it returns None
+                        if result:
+                            await websocket.send(json.dumps(result))
                     else:
                         logger.info("No valid speech detected")
                         await websocket.send(json.dumps({
