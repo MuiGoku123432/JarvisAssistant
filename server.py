@@ -22,7 +22,8 @@ import numpy as np
 import wave
 from flask import jsonify
 from collections.abc import Sequence
-
+from update_classifier import classify_update_intent, add_project_entry
+from context_fetchers     import set_user_info
 
 #DURATION = 5  # Duration in seconds
 
@@ -156,6 +157,27 @@ async def listen_for_input(use_hotword):
 
 async def process_command(websocket, user_input):
     global last_response
+
+    # intent = classify_update_intent(user_input)
+    # if intent["update_type"] == "user_info":
+    #     set_user_info(intent["key"], intent["value"])
+    #     ack = f"Okay, I’ve updated your {intent['key']}."
+    #     await websocket.send(json.dumps({
+    #         "type":     "chat_response",
+    #         "response": ack,
+    #         "audio_url": None
+    #     }))
+    #     return  # short-circuit, don’t fall through
+
+    # if intent["update_type"] == "new_project":
+    #     add_project_entry(intent["project"])
+    #     ack = f"Added project “{intent['project']['name']}.”"
+    #     await websocket.send(json.dumps({
+    #         "type":     "chat_response",
+    #         "response": ack,
+    #         "audio_url": None
+    #     }))
+    #     return  # short-circuit
     
     logger.info(f"Processing command: {user_input}")
     command_response = jarvis.execute_command(user_input)

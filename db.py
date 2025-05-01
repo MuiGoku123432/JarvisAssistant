@@ -51,4 +51,12 @@ class WatchedRoot(Base):
     root     = Column(Text, unique=True, nullable=False)
     added_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
+class UserInfo(Base):
+    __tablename__ = "user_info"
+    id         = Column(Integer, primary_key=True)
+    user_key   = Column(Text,    unique=True, nullable=False)
+    user_value = Column(Text,    nullable=False)
+    updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 Base.metadata.create_all(engine)
