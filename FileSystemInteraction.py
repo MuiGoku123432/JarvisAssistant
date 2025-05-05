@@ -5,7 +5,8 @@ import subprocess
 import datetime
 import python_weather
 import asyncio
-
+from sqlalchemy import func
+from db import Session, FileIndex
 
 
 class JarvisFileInteraction:
@@ -14,105 +15,112 @@ class JarvisFileInteraction:
         shortcuts_folder = '../shortcuts'
         self.home_directory = os.path.expanduser('~')
         self.exe_paths = exe_paths or []
+    def open_directory(self, directory_name: str) -> str:
+        """
+        Search the database for a directory matching `directory_name` and open it in File Explorer.
+        Only uses DB info; no filesystem fallbacks.
+        """
+        session = Session()
+        # case-insensitive match for directory names containing the query
+        pat = f"%{directory_name.strip()}%"
+        match = (
+            session.query(FileIndex.path)
+                   .filter(
+                       FileIndex.is_dir.is_(True),
+                       func.lower(FileIndex.path).like(pat.lower())
+                   )
+                   .first()
+        )
+        if not match:
+            return f"Directory '{directory_name}' not found in index."
 
-
-    def change_directory(self, path):
-        path = self.resolve_shortcut(path)
-        if os.path.isdir(path):
-            self.current_directory = path
-            return f"Changed directory to {path}"
-        else:
-            # Check in home directory
-            home_path = os.path.join(self.home_directory, path)
-            if os.path.isdir(home_path):
-                self.current_directory = home_path
-                return f"Changed directory to {home_path}"
-            # Search for the directory across the computer
-            for root, dirs, files in os.walk("/"):
-                if path in dirs:
-                    found_path = os.path.join(root, path)
-                    self.current_directory = found_path
-                    return f"Changed directory to {found_path}"
-            return "Directory does not exist."
-        
-    def open_directory(self, path):
-        # path = self.resolve_shortcut(path)
-        # if os.path.isdir(path):
-        #     subprocess.Popen(f'explorer /select,"{path}"')
-        #     return f"Opened directory {path} in file explorer."
-        # else:
-            # Check in home directory
-            home_path = os.path.join(self.home_directory, path)
-            if os.path.isdir(home_path):
-                print('HOME PATH>>>>>>', home_path)
-                subprocess.Popen(f'explorer /select,"{home_path}"')
-                print('OPENED HOME PATH>>>>>>', home_path)
-                return f"Opened directory {home_path} in file explorer."
-            # Search for the directory across the computer
-            for root, dirs, files in os.walk("/"):
-                if path in dirs:
-                    found_path = os.path.join(root, path)
-                    subprocess.Popen(f'explorer /select,"{found_path}"')
-                    return f"Opened directory {found_path} in file explorer."
-            return "Directory does not exist."
-
-    def list_files(self):
+        path = match[0]
         try:
-            files = os.listdir(self.current_directory)
-            return files
+            subprocess.Popen(f'explorer /select,"{path}"')
+            return f"Opened directory {path} in File Explorer."
         except Exception as e:
             return str(e)
 
-    def read_file(self, filename):
-        # Check if file exists directly
-        file_path = os.path.join(self.current_directory, filename)
-        if os.path.isfile(file_path):
+    def search_files(self, pattern: str) -> list:
+        """
+        Use pure database logic to return a list of file paths matching `pattern`.
+        No filesystem fallback.
+        """
+        session = Session()
+        pat = f"%{pattern.strip()}%"
+        rows = (
+            session.query(FileIndex.path)
+                   .filter(
+                       FileIndex.is_dir.is_(False),
+                       func.lower(FileIndex.path).like(pat.lower())
+                   )
+                   .limit(20)
+                   .all()
+        )
+        return [r[0] for r in rows]
+
+    def delete_file(self, filename: str) -> str:
+        """
+        Delete the file at the path found in the database matching `filename`,
+        then remove its entry from the index.
+        Only uses DB info.
+        """
+        session = Session()
+        pat = f"%{filename.strip()}%"
+        match = (
+            session.query(FileIndex.path)
+                   .filter(
+                       FileIndex.is_dir.is_(False),
+                       func.lower(FileIndex.path).like(pat.lower())
+                   )
+                   .first()
+        )
+        if not match:
+            return f"File '{filename}' not found in index."
+
+        path = match[0]
+        try:
+            os.remove(path)
+        except Exception as e:
+            return f"Error deleting file: {e}"
+    
+    def open_file(self, filename: str) -> str:
+        """
+        Look up `filename` in the file_index, then launch it
+        in its default application (Notepad for .txt, Word for .docx, VSCode for .py, etc).
+        """
+        session = Session()
+        pat = f"%{filename.strip()}%"
+        # find the first non-directory whose path contains the query
+        match = (
+            session.query(FileIndex.path)
+                   .filter(
+                       FileIndex.is_dir.is_(False),
+                       func.lower(FileIndex.path).like(pat.lower())
+                   )
+                   .first()
+        )
+        if not match:
+            return f"File '{filename}' not found in index."
+
+        path = match[0]
+        try:
+            # On Windows this opens the file with its associated app.
+            os.startfile(path)
+            return f"Opened file {path} in its default application."
+        except AttributeError:
+            # os.startfile only exists on Windows—fall back if you ever run cross-platform:
             try:
-                with open(file_path, 'r') as f:
-                    return f.read()
+                if os.name == "posix":
+                    subprocess.Popen(["xdg-open", path])
+                else:
+                    subprocess.Popen(["open", path])  # macOS
+                return f"Opened file {path} with system default."
             except Exception as e:
-                return str(e)
-        else:
-            # Check for matching files with different extensions
-            for ext in ['', '.txt', '.docx', '.pdf', '.csv']:  # Add more extensions as needed
-                file_path_ext = file_path + ext
-                if os.path.isfile(file_path_ext):
-                    try:
-                        with open(file_path_ext, 'r') as f:
-                            return f.read()
-                    except Exception as e:
-                        return str(e)
-        return "File does not exist."
-
-    def create_file(self, filename, content=""):
-        try:
-            with open(os.path.join(self.current_directory, filename), 'w') as f:
-                f.write(content)
-            return f"File {filename} created."
+                return f"Error opening file: {e}"
         except Exception as e:
-            return str(e)
-
-    def write_to_file(self, filename, content):
-        try:
-            with open(os.path.join(self.current_directory, filename), 'a') as f:
-                f.write(content)
-            return f"Content written to {filename}."
-        except Exception as e:
-            return str(e)
-
-    def search_files(self, pattern):
-        try:
-            files = glob.glob(os.path.join(self.current_directory, pattern))
-            return files
-        except Exception as e:
-            return str(e)
-
-    def delete_file(self, filename):
-        try:
-            os.remove(os.path.join(self.current_directory, filename))
-            return f"File {filename} deleted."
-        except Exception as e:
-            return str(e)
+            return f"Error opening file: {e}"
+    
     def execute_app(self, app_name):
         print('IN EXECUTE!!! APP NAME>>>>>>', app_name)
         # Remove spaces and ensure app_name has .exe extension
