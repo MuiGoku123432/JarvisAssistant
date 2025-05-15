@@ -10,7 +10,7 @@ import os
 # Pull your DB URL from env
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql+psycopg2://postgres:crf2122006@localhost:5432/jarvis"
+    "postgresql+psycopg2://postgres:crf2122006@localhost:5432/JARVIS_DB"
 )
 
 engine  = create_engine(DATABASE_URL, echo=False)

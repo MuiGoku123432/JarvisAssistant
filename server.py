@@ -24,6 +24,9 @@ from flask import jsonify
 from collections.abc import Sequence
 from update_classifier import classify_update_intent, add_project_entry
 from context_fetchers     import set_user_info
+import os, re
+from pathlib import Path
+from dotenv import load_dotenv
 
 #DURATION = 5  # Duration in seconds
 
@@ -35,14 +38,35 @@ class ListeningState:
 listening_state = Value('i', ListeningState.IDLE)
 
 
-load_dotenv()
+# figure out where this file lives, then the project root one level up
+BASE_DIR    = Path(__file__).resolve().parent
+PROJECT_ROOT = BASE_DIR.parent
+
+# 1) load the repo‑root .env
+load_dotenv(dotenv_path=PROJECT_ROOT / ".env")
+
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 MODEL_PATH = os.environ.get('MODEL_PATH')
-EXE_PATHS = os.environ.get('EXE_PATHS').split(",")
-KB_DIR = os.environ.get('KB_DIR')
+raw_exes = os.getenv("EXE_PATHS", "")           # e.g. "C:/foo;D:/bar" or "/usr/bin,/opt/app"
+EXE_PATHS = [p.strip() for p in re.split(r"[;,]", raw_exes) if p.strip()]
+
+# new: audio output dir
+audio_dir_name = os.getenv("AUDIO_DIR", "audio_files")
+AUDIO_DIR      = (PROJECT_ROOT / audio_dir_name).resolve()
+AUDIO_DIR.mkdir(parents=True, exist_ok=True)
+
+# new: upload/temp folder
+upload_dir_name = os.getenv("UPLOAD_FOLDER", "temp_audio")
+UPLOAD_FOLDER   = (PROJECT_ROOT / upload_dir_name).resolve()
+UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
+
+FLASK_HOST = os.getenv("FLASK_HOST", "0.0.0.0")
+FLASK_PORT = int(os.getenv("FLASK_PORT", 5000))
+BASE_URL   = os.getenv("BASE_URL", f"http://localhost:{FLASK_PORT}")
 
 conversation_history = []
 
@@ -59,14 +83,8 @@ last_response = ""
 # Initialize Flask app
 app = Flask(__name__)
 CORS(app)
-AUDIO_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'audio_files')
-os.makedirs(AUDIO_DIR, exist_ok=True)
 
 tts.synthesize_speech("Hello, sir. How can I assist you today?", AUDIO_DIR)
-
-UPLOAD_FOLDER = 'temp_audio'
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
 
 @app.route('/upload_audio', methods=['POST'])
 def upload_audio():
@@ -224,7 +242,7 @@ async def process_command(websocket, user_input):
         logger.error(f"Failed to generate audio file or file does not exist: {audio_file_path}")
         return None
     
-    audio_url = f"http://192.168.254.23:5000/audio/{audio_filename}"
+    audio_url = f"{BASE_URL}/audio/{audio_filename}"
     
     logger.info(f"Finished processing command: {user_input}")
     logger.info(f"Sending response: {llm_response[:50]}...")
@@ -307,7 +325,7 @@ async def handle_client(websocket, path):
         logger.info("Client disconnected")
 
 def run_flask():
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host=FLASK_HOST, port=FLASK_PORT)
 
 async def main():
     logger.info("Starting WebSocket server...")

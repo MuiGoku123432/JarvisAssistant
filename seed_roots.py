@@ -6,7 +6,7 @@ session = Session()
 # Change these to whichever folders you want indexed.
 # On Windows Python, use Windows paths:
 roots = [
-    r"D:\\"
+    r"/"
 ]
 
 

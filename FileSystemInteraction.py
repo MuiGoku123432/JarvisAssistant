@@ -1,6 +1,6 @@
 import os
 import glob
-import winshell # type: ignore
+#import winshell # type: ignore
 import subprocess
 import datetime
 import python_weather
