@@ -37,7 +37,7 @@ def load_models():
         speaker_ids = model.hps.data.spk2id
 
         # Load the source speaker embedding
-        source_se = torch.load('D:\\repos\\mine\\JarvisAssist\\OpenVoice\\checkpoints2\\base_speakers\\ses\\en-br.pth', map_location=device)
+        source_se = torch.load('/home/cfanch06/repos/mine/Jarvis/JarvisAssistant/OpenVoice/checkpoints2/base_speakers/ses/en-br.pth', map_location=device)
 
         print('Models and embeddings loaded successfully.')
     except Exception as e:

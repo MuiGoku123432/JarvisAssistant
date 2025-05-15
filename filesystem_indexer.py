@@ -3,17 +3,26 @@ from db import Session, FileIndex, WatchedRoot
 
 # Still list any absolute prefixes you want to skip entirely...
 EXCLUDE_PREFIXES = [
-    r"C:\Windows",
-    r"C:\Program Files",
-    r"C:\Program Files (x86)",
-    r"C:\Users\conno\AppData"
-    r"D:\Programs"
-    r"D:\GTAMODS"
-    r"D:\Oculus"
-    r"D:\PrehistoricWorldMods"
-    r"D:\\3DModels"
+    "/proc",
+    "/sys",
+    "/dev",
+    "/run",
+    "/var/run",
+    "/tmp",
+    "/var/tmp",
+    "/selinux",
+    "/snap",
+    "/mnt",        # external & network mounts
+    "/media",
+    "/var/cache",
+    "/var/log",
+    "/lost+found",
+    "/var/lib/docker",
+    "/run/containerd",
+    "/run/lxc",
+    os.path.expanduser("~/.cache"),
+    os.path.expanduser("~/.local/share/Trash"),
 ]
-
 def should_skip(path: str) -> bool:
     # normalize case & separators
     p = os.path.normcase(os.path.normpath(path))
@@ -46,7 +55,11 @@ def index_root(root_path: str):
             if should_skip(full):
                 continue
 
-            stat = os.stat(full)
+            try:
+                stat = os.stat(full)
+            except (FileNotFoundError, PermissionError):
+                # disappeared under /dev, or a socket/pipe, or no perms
+                continue
             meta = {"size": stat.st_size, "mtime": stat.st_mtime}
 
             entry = session.query(FileIndex).filter_by(path=full).first()
